@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Rekap Bulanan — KP2A Kintamani</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Segoe UI', Arial, sans-serif; background: #f0f2f5; color: #222; padding: 16px; }
+  header { text-align: center; margin-bottom: 16px; }
+  header h1 { font-size: 16pt; color: #1a5276; }
+  header p { font-size: 9pt; color: #666; }
+  header a { color: #2e86c1; text-decoration: none; font-size: 9pt; }
+
+  .controls {
+    background: #fff; border-radius: 8px; padding: 12px;
+    margin-bottom: 12px; display: flex; gap: 10px; flex-wrap: wrap;
+    box-shadow: 0 1px 4px rgba(0,0,0,.06);
+  }
+  .controls select, .controls button {
+    padding: 8px 12px; border-radius: 6px; border: 1px solid #ccc;
+    font-size: 10pt; cursor: pointer;
+  }
+  .controls button { background: #1a5276; color: #fff; border: none; font-weight: 600; }
+
+  .rekap-card {
+    background: #fff; border-radius: 8px; padding: 12px;
+    margin-bottom: 10px; box-shadow: 0 1px 4px rgba(0,0,0,.06);
+  }
+  .rekap-card h3 { font-size: 11pt; color: #1a5276; margin-bottom: 8px; }
+  .rekap-card .summary {
+    display: flex; gap: 10px; flex-wrap: wrap; font-size: 9pt; margin-bottom: 8px;
+  }
+  .rekap-card .summary span { padding: 4px 10px; border-radius: 20px; font-weight: 600; }
+  .summary .h { background: #eafaf1; color: #27ae60; }
+  .summary .s { background: #fdedec; color: #e74c3c; }
+  .summary .k { background: #ebf5fb; color: #3498db; }
+  .summary .l { background: #f4ecf7; color: #9b59b6; }
+  .summary .t { background: #fef5e7; color: #e67e22; }
+
+  table { width: 100%; border-collapse: collapse; font-size: 8.5pt; }
+  th, td { padding: 6px 8px; text-align: left; border-bottom: 1px solid #eee; }
+  th { background: #f8f9fa; color: #555; font-weight: 600; }
+  td.nama { font-weight: 600; }
+  td.h { color: #27ae60; } td.s { color: #e74c3c; }
+  td.k { color: #3498db; } td.l { color: #9b59b6; } td.t { color: #e67e22; }
+
+  .empty { text-align: center; padding: 40px; color: #aaa; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Rekap Bulanan</h1>
+  <p>KP2A Kintamani <br><a href="index.html">← Kembali ke Homepage</a></p>
+</header>
+
+<div class="controls">
+  <select id="pilihKelas"></select>
+  <select id="pilihBulan"></select>
+  <button onclick="loadRekap()">Tampilkan</button>
+  <button onclick="exportBulanCSV()" style="background:#27ae60">📤 Export CSV</button>
+</div>
+
+<div id="hasil"></div>
+
+<script src="data-siswa.js"></script>
+<script>
+  // Isi pilihan kelas
+  const selKelas = document.getElementById("pilihKelas");
+  Object.keys(DATA_KELAS).forEach(k => {
+    const opt = document.createElement("option");
+    opt.value = k; opt.textContent = k;
+    selKelas.appendChild(opt);
+  });
+
+  // Isi pilihan bulan (12 bulan terakhir)
+  const selBulan = document.getElementById("pilihBulan");
+  const now = new Date();
+  for (let i = 0; i < 12; i++) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    const val = d.getFullYear() + "-" + String(d.getMonth()+1).padStart(2,"0");
+    const label = d.toLocaleDateString("id-ID", { month: "long", year: "numeric" });
+    const opt = document.createElement("option");
+    opt.value = val; opt.textContent = label;
+    selBulan.appendChild(opt);
+  }
+
+  function loadRekap() {
+    const kelas = selKelas.value;
+    const bulan = selBulan.value; // "2026-11"
+
+    const KEY = "kp2a_absensi_" + kelas;
+    let data = {};
+    try { data = JSON.parse(localStorage.getItem(KEY) || "{}"); } catch(e) {}
+
+    // Filter tanggal yang diawali dengan bulan
+    const tanggalList = Object.keys(data).filter(t => t.startsWith(bulan)).sort();
+    const siswaList = DATA_KELAS[kelas].siswa;
+
+    if (tanggalList.length === 0) {
+      document.getElementById("hasil").innerHTML = `<div class="empty">Belum ada data absensi untuk ${kelas} di bulan ini.</div>`;
+      return;
+    }
+
+    // Hitung rekap per siswa
+    const rekap = {};
+    siswaList.forEach(s => {
+      rekap[s.kode] = { nama: s.nama, kode: s.kode, h: 0, s: 0, k: 0, l: 0, t: 0, total: 0 };
+    });
+    tanggalList.forEach(tgl => {
+      Object.entries(data[tgl]).forEach(([kode, st]) => {
+        if (rekap[kode]) {
+          rekap[kode][st]++;
+          rekap[kode].total++;
+        }
+      });
+    });
+
+    // Total per status
+    let tot = { h: 0, s: 0, k: 0, l: 0, t: 0 };
+    Object.values(rekap).forEach(r => {
+      tot.h += r.h; tot.s += r.s; tot.k += r.k; tot.l += r.l; tot.t += r.t;
+    });
+
+    let html = `
+      <div class="rekap-card">
+        <h3>${kelas} — ${selBulan.options[selBulan.selectedIndex].text}</h3>
+        <div class="summary">
+          <span class="h">Hadir: ${tot.h}</span>
+          <span class="s">Sakit: ${tot.s}</span>
+          <span class="k">Keluarga: ${tot.k}</span>
+          <span class="l">Lain: ${tot.l}</span>
+          <span class="t">Tanpa Ket.: ${tot.t}</span>
+        </div>
+        <p style="font-size:8.5pt;color:#888;margin-bottom:8px">${tanggalList.length} hari absensi tercatat</p>
+        <table>
+          <thead>
+            <tr>
+              <th>No</th><th>Nama</th><th>Kode</th>
+              <th>H</th><th>S</th><th>K</th><th>L</th><th>T</th><th>Total</th>
+            </tr>
+          </thead>
+          <tbody>
+    `;
+    Object.values(rekap).sort((a,b) => a.nama.localeCompare(b.nama)).forEach((r, i) => {
+      html += `
+        <tr>
+          <td>${i+1}</td>
+          <td class="nama">${r.nama}</td>
+          <td style="font-family:monospace;font-size:7.5pt">${r.kode}</td>
+          <td class="h">${r.h}</td>
+          <td class="s">${r.s}</td>
+          <td class="k">${r.k}</td>
+          <td class="l">${r.l}</td>
+          <td class="t">${r.t}</td>
+          <td><b>${r.total}</b></td>
+        </tr>
+      `;
+    });
+    html += `</tbody></table></div>`;
+    document.getElementById("hasil").innerHTML = html;
+
+    // Simpan untuk export
+    window._rekapData = { kelas, bulan, tanggalList, rekap, data };
+  }
+
+  function exportBulanCSV() {
+    if (!window._rekapData) {
+      alert("Tampilkan rekap dulu sebelum export.");
+      return;
+    }
+    const { kelas, bulan, tanggalList, rekap } = window._rekapData;
+
+    // Header: Nama, Kode, lalu tanggal-tanggal
+    let csv = "No,Nama,Kode";
+    tanggalList.forEach(t => { csv += `,${t.split("-")[2]}`; });
+    csv += ",H,S,K,L,T,Total\n";
+
+    Object.values(rekap).sort((a,b) => a.nama.localeCompare(b.nama)).forEach((r, i) => {
+      csv += `${i+1},"${r.nama}",${r.kode}`;
+      tanggalList.forEach(tgl => {
+        const st = window._rekapData.data[tgl][r.kode] || "-";
+        csv += `,${st}`;
+      });
+      csv += `,${r.h},${r.s},${r.k},${r.l},${r.t},${r.total}\n`;
+    });
+
+    const blob = new Blob(["\ufeff" + csv], { type: "text/csv;charset=utf-8;" });
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.download = `rekap_${kelas}_${bulan}.csv`;
+    link.click();
+  }
+
+  // Auto load
+  loadRekap();
+</script>
+
+</body>
+</html>
