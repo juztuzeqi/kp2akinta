@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>KP2A Kintamani — Absensi</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+  body {
+    font-family: 'Segoe UI', Arial, sans-serif;
+    background: linear-gradient(135deg, #eaf2f8, #f0f2f5);
+    min-height: 100vh;
+    padding: 20px;
+  }
+  header {
+    text-align: center;
+    margin-bottom: 24px;
+    padding-top: 20px;
+  }
+  header h1 {
+    font-size: 22pt;
+    color: #1a5276;
+    letter-spacing: 1px;
+  }
+  header p { color: #666; font-size: 10pt; margin-top: 4px; }
+
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    gap: 12px;
+    max-width: 700px;
+    margin: 0 auto;
+  }
+
+  .kelas-card {
+    background: #fff;
+    border-radius: 12px;
+    padding: 20px 16px;
+    text-decoration: none;
+    color: inherit;
+    box-shadow: 0 2px 8px rgba(0,0,0,.08);
+    transition: transform 0.15s, box-shadow 0.15s;
+    border-left: 5px solid #1a5276;
+    display: block;
+  }
+  .kelas-card:active { transform: scale(0.97); }
+  .kelas-card h2 {
+    font-size: 15pt;
+    color: #1a5276;
+    margin-bottom: 4px;
+  }
+  .kelas-card .tutor {
+    font-size: 8.5pt;
+    color: #666;
+    margin-bottom: 10px;
+  }
+  .kelas-card .count {
+    font-size: 8pt;
+    color: #2e86c1;
+    font-weight: 600;
+  }
+
+  .footer-links {
+    text-align: center;
+    margin-top: 30px;
+    font-size: 9pt;
+  }
+  .footer-links a {
+    color: #2e86c1;
+    text-decoration: none;
+    margin: 0 10px;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>KP2A KINTAMANI</h1>
+  <p>Pilih kelas untuk mulai absensi</p>
+</header>
+
+<div class="grid" id="gridKelas"></div>
+
+<div class="footer-links">
+  <a href="rekap.html">📊 Rekap Bulanan</a>
+</div>
+
+<script src="data-siswa.js"></script>
+<script>
+  const grid = document.getElementById("gridKelas");
+  Object.entries(DATA_KELAS).forEach(([nama, info]) => {
+    const a = document.createElement("a");
+    a.className = "kelas-card";
+    a.href = `absensi.html?kelas=${nama}`;
+    a.innerHTML = `
+      <h2>${nama}</h2>
+      <div class="tutor">${info.tutor}</div>
+      <div class="count">${info.siswa.length} siswa</div>
+    `;
+    grid.appendChild(a);
+  });
+</script>
+
+</body>
+</html>
