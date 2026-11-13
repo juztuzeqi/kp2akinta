@@ -1,0 +1,612 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>Absensi KP2A Kintamani</title>
+<script src="https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+  body {
+    font-family: 'Segoe UI', Arial, sans-serif;
+    background: #f0f2f5;
+    color: #222;
+    padding-bottom: 80px;
+  }
+
+  /* ===== HEADER ===== */
+  header {
+    background: linear-gradient(135deg, #1a5276, #2e86c1);
+    color: #fff;
+    padding: 16px 20px;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    box-shadow: 0 2px 8px rgba(0,0,0,.15);
+  }
+  header h1 { font-size: 16pt; letter-spacing: 0.5px; }
+  header small { font-size: 9pt; opacity: 0.85; }
+
+  /* ===== KARTU STATISTIK ===== */
+  .stats {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+    padding: 12px;
+  }
+  .stat {
+    background: #fff;
+    border-radius: 8px;
+    padding: 10px;
+    text-align: center;
+    box-shadow: 0 1px 4px rgba(0,0,0,.06);
+  }
+  .stat .num { font-size: 18pt; font-weight: 700; color: #1a5276; }
+  .stat .lbl { font-size: 7.5pt; color: #888; text-transform: uppercase; }
+
+  /* ===== TOMBOL SCAN ===== */
+  .scan-area { padding: 0 12px 12px; }
+  .btn-scan {
+    width: 100%;
+    background: #1a5276;
+    color: #fff;
+    border: none;
+    padding: 14px;
+    border-radius: 8px;
+    font-size: 11pt;
+    font-weight: 600;
+    cursor: pointer;
+    box-shadow: 0 2px 8px rgba(26,82,118,.3);
+  }
+  .btn-scan:active { transform: scale(0.98); }
+  .btn-scan.stop { background: #c0392b; }
+
+  /* ===== AREA KAMERA ===== */
+  #reader {
+    width: 100%;
+    max-width: 500px;
+    margin: 0 auto 12px;
+    border-radius: 8px;
+    overflow: hidden;
+    display: none;
+  }
+  #reader.active { display: block; }
+
+  /* ===== INPUT MANUAL ===== */
+  .manual {
+    padding: 0 12px 12px;
+    display: flex;
+    gap: 8px;
+  }
+  .manual input {
+    flex: 1;
+    padding: 10px 12px;
+    border: 1px solid #ccc;
+    border-radius: 8px;
+    font-size: 10pt;
+    font-family: 'Courier New', monospace;
+  }
+  .manual button {
+    background: #2e86c1;
+    color: #fff;
+    border: none;
+    padding: 10px 16px;
+    border-radius: 8px;
+    font-size: 10pt;
+    font-weight: 600;
+    cursor: pointer;
+  }
+
+  /* ===== DAFTAR HADIR ===== */
+  .list-section { padding: 0 12px; }
+  .list-title {
+    font-size: 10pt;
+    font-weight: 700;
+    color: #1a5276;
+    margin-bottom: 8px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .list-title .actions button {
+    background: #fff;
+    border: 1px solid #ccc;
+    padding: 5px 10px;
+    border-radius: 6px;
+    font-size: 8pt;
+    cursor: pointer;
+    margin-left: 6px;
+    color: #555;
+  }
+  .list-title .actions button.danger { color: #c0392b; border-color: #e6b0aa; }
+
+  #daftarHadir { list-style: none; }
+  #daftarHadir li {
+    background: #fff;
+    border-radius: 8px;
+    padding: 10px 12px;
+    margin-bottom: 6px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    box-shadow: 0 1px 3px rgba(0,0,0,.05);
+    animation: slideIn 0.3s ease;
+  }
+  @keyframes slideIn {
+    from { opacity: 0; transform: translateY(-10px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  #daftarHadir li .avatar {
+    width: 36px; height: 36px;
+    background: #1a5276;
+    color: #fff;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: 11pt;
+    flex-shrink: 0;
+  }
+  #daftarHadir li .info { flex: 1; min-width: 0; }
+  #daftarHadir li .info .nama {
+    font-size: 10pt;
+    font-weight: 600;
+    color: #222;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  #daftarHadir li .info .kode {
+    font-size: 8pt;
+    font-family: 'Courier New', monospace;
+    color: #888;
+  }
+  #daftarHadir li .time {
+    font-size: 8pt;
+    color: #2e86c1;
+    font-weight: 600;
+    text-align: right;
+  }
+  .empty {
+    text-align: center;
+    padding: 30px 20px;
+    color: #aaa;
+    font-size: 9pt;
+  }
+
+  /* ===== TOAST ===== */
+  #toast {
+    position: fixed;
+    bottom: 100px;
+    left: 50%;
+    transform: translateX(-50%) translateY(20px);
+    background: #27ae60;
+    color: #fff;
+    padding: 12px 20px;
+    border-radius: 8px;
+    font-size: 10pt;
+    font-weight: 600;
+    opacity: 0;
+    transition: all 0.3s ease;
+    z-index: 100;
+    pointer-events: none;
+    max-width: 90%;
+    text-align: center;
+  }
+  #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+  #toast.error { background: #c0392b; }
+  #toast.warning { background: #e67e22; }
+
+  /* ===== PANEL SETTINGS SISWA ===== */
+  .settings-btn {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    width: 52px;
+    height: 52px;
+    background: #1a5276;
+    color: #fff;
+    border: none;
+    border-radius: 50%;
+    font-size: 20pt;
+    cursor: pointer;
+    box-shadow: 0 4px 12px rgba(0,0,0,.25);
+    z-index: 20;
+  }
+  .modal {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,.6);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    z-index: 30;
+  }
+  .modal.active { display: flex; }
+  .modal-content {
+    background: #fff;
+    border-radius: 12px;
+    padding: 20px;
+    width: 100%;
+    max-width: 500px;
+    max-height: 90vh;
+    overflow-y: auto;
+  }
+  .modal-content h2 {
+    font-size: 13pt;
+    color: #1a5276;
+    margin-bottom: 8px;
+  }
+  .modal-content p {
+    font-size: 9pt;
+    color: #666;
+    margin-bottom: 12px;
+    line-height: 1.4;
+  }
+  .modal-content textarea {
+    width: 100%;
+    height: 180px;
+    font-family: 'Courier New', monospace;
+    font-size: 9pt;
+    padding: 8px;
+    border: 1px solid #ccc;
+    border-radius: 6px;
+    resize: vertical;
+  }
+  .modal-content .row {
+    display: flex;
+    gap: 10px;
+    margin-top: 12px;
+  }
+  .modal-content .row button {
+    flex: 1;
+    padding: 10px;
+    border-radius: 6px;
+    font-size: 10pt;
+    font-weight: 600;
+    cursor: pointer;
+    border: none;
+  }
+  .modal-content .row .save { background: #1a5276; color: #fff; }
+  .modal-content .row .cancel { background: #eee; color: #555; }
+
+  .hint {
+    font-size: 8.5pt;
+    color: #e67e22;
+    background: #fef5e7;
+    padding: 8px 10px;
+    border-radius: 6px;
+    margin-top: 10px;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>KP2A KINTAMANI</h1>
+  <small>Absensi Siswa</small>
+</header>
+
+<!-- STATISTIK -->
+<div class="stats">
+  <div class="stat">
+    <div class="num" id="statHadir">0</div>
+    <div class="lbl">Hadir</div>
+  </div>
+  <div class="stat">
+    <div class="num" id="statTotal">0</div>
+    <div class="lbl">Total Siswa</div>
+  </div>
+  <div class="stat">
+    <div class="num" id="statBelum">0</div>
+    <div class="lbl">Belum</div>
+  </div>
+</div>
+
+<!-- TOMBOL SCAN -->
+<div class="scan-area">
+  <button class="btn-scan" id="btnScan" onclick="toggleScan()">
+    📷 Mulai Scan QR
+  </button>
+</div>
+
+<!-- AREA KAMERA -->
+<div id="reader"></div>
+
+<!-- INPUT MANUAL -->
+<div class="manual">
+  <input type="text" id="manualInput" placeholder="Ketik kode siswa..." autocomplete="off">
+  <button onclick="submitManual()">✓</button>
+</div>
+
+<!-- DAFTAR HADIR -->
+<div class="list-section">
+  <div class="list-title">
+    <span>Daftar Hadir Hari Ini</span>
+    <span class="actions">
+      <button onclick="exportCSV()">📤 CSV</button>
+      <button class="danger" onclick="resetHariIni()">🔄 Reset</button>
+    </span>
+  </div>
+  <ul id="daftarHadir"></ul>
+</div>
+
+<!-- TOMBOL SETTINGS -->
+<button class="settings-btn" onclick="openSettings()">⚙️</button>
+
+<!-- MODAL SETTINGS -->
+<div class="modal" id="modalSettings">
+  <div class="modal-content">
+    <h2>Data Siswa</h2>
+    <p>Tempel daftar siswa, <b>satu per baris</b>, format: <code>Nama, Kode</code> (boleh copy dari Excel).</p>
+    <textarea id="siswaInput" placeholder="T. Muhammad Adzra Gafi Alfarezi, S2025082202216
+Nama Siswa Kedua, S2025082202217"></textarea>
+    <div class="hint">
+      ⚠️ Data siswa disimpan di browser ini saja. Kalau ganti HP/browser, tempel ulang di sini.
+    </div>
+    <div class="row">
+      <button class="cancel" onclick="closeSettings()">Batal</button>
+      <button class="save" onclick="saveSiswa()">Simpan</button>
+    </div>
+  </div>
+</div>
+
+<!-- TOAST -->
+<div id="toast"></div>
+
+<script>
+  // ============ STORAGE KEYS ============
+  const KEY_SISWA = "kp2a_siswa";
+  const KEY_HADIR = "kp2a_hadir";
+
+  // ============ STATE ============
+  let siswaMap = {};      // { kode: nama }
+  let hadirHariIni = [];  // [{ kode, nama, waktu }]
+  let html5QrCode = null;
+  let scanning = false;
+
+  // ============ INIT ============
+  function loadData() {
+    // Load siswa
+    const rawSiswa = localStorage.getItem(KEY_SISWA);
+    if (rawSiswa) {
+      try { siswaMap = JSON.parse(rawSiswa); } catch(e) { siswaMap = {}; }
+    }
+
+    // Load hadir (reset otomatis kalau beda hari)
+    const rawHadir = localStorage.getItem(KEY_HADIR);
+    if (rawHadir) {
+      try {
+        const data = JSON.parse(rawHadir);
+        const today = new Date().toDateString();
+        if (data.tanggal === today) {
+          hadirHariIni = data.list || [];
+        } else {
+          hadirHariIni = []; // hari baru, reset
+          localStorage.removeItem(KEY_HADIR);
+        }
+      } catch(e) { hadirHariIni = []; }
+    }
+
+    render();
+  }
+
+  function saveHadir() {
+    localStorage.setItem(KEY_HADIR, JSON.stringify({
+      tanggal: new Date().toDateString(),
+      list: hadirHariIni
+    }));
+  }
+
+  // ============ RENDER ============
+  function render() {
+    const total = Object.keys(siswaMap).length;
+    document.getElementById("statHadir").textContent = hadirHariIni.length;
+    document.getElementById("statTotal").textContent = total;
+    document.getElementById("statBelum").textContent = Math.max(0, total - hadirHariIni.length);
+
+    const ul = document.getElementById("daftarHadir");
+    if (hadirHariIni.length === 0) {
+      ul.innerHTML = `<div class="empty">Belum ada yang absen hari ini.<br>Scan QR kartu siswa untuk mulai.</div>`;
+      return;
+    }
+
+    // Urutkan terbaru di atas
+    const sorted = [...hadirHariIni].sort((a, b) => b.waktu - a.waktu);
+    ul.innerHTML = sorted.map(h => `
+      <li>
+        <div class="avatar">${(h.nama || "?")[0].toUpperCase()}</div>
+        <div class="info">
+          <div class="nama">${h.nama || "(tidak dikenal)"}</div>
+          <div class="kode">${h.kode}</div>
+        </div>
+        <div class="time">${h.waktu}</div>
+      </li>
+    `).join("");
+  }
+
+  // ============ SCAN ============
+  function toggleScan() {
+    if (scanning) stopScan(); else startScan();
+  }
+
+  function startScan() {
+    if (Object.keys(siswaMap).length === 0) {
+      showToast("Isi daftar siswa dulu (tombol ⚙️)", "error");
+      return;
+    }
+
+    html5QrCode = new Html5Qrcode("reader");
+    document.getElementById("reader").classList.add("active");
+
+    html5QrCode.start(
+      { facingMode: "environment" },
+      { fps: 10, qrbox: { width: 250, height: 250 } },
+      onScanSuccess,
+      () => {} // ignore errors per frame
+    ).then(() => {
+      scanning = true;
+      const btn = document.getElementById("btnScan");
+      btn.textContent = "⏹ Hentikan Scan";
+      btn.classList.add("stop");
+    }).catch(err => {
+      showToast("Gagal buka kamera: " + err, "error");
+    });
+  }
+
+  function stopScan() {
+    if (html5QrCode) {
+      html5QrCode.stop().then(() => {
+        html5QrCode.clear();
+        html5QrCode = null;
+      }).catch(() => {});
+    }
+    scanning = false;
+    document.getElementById("reader").classList.remove("active");
+    const btn = document.getElementById("btnScan");
+    btn.textContent = "📷 Mulai Scan QR";
+    btn.classList.remove("stop");
+  }
+
+  function onScanSuccess(decodedText) {
+    prosesAbsen(decodedText.trim());
+  }
+
+  // ============ PROSES ABSEN ============
+  function prosesAbsen(kode) {
+    kode = kode.trim();
+    if (!kode) return;
+
+    // Cek sudah absen
+    if (hadirHariIni.some(h => h.kode === kode)) {
+      showToast(`⚠️ ${siswaMap[kode] || kode} sudah absen hari ini`, "warning");
+      return;
+    }
+
+    // Cek terdaftar
+    if (!siswaMap[kode]) {
+      showToast(`❌ Kode tidak terdaftar: ${kode}`, "error");
+      return;
+    }
+
+    // Catat
+    const now = new Date();
+    const waktu = now.toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" });
+    hadirHariIni.push({ kode, nama: siswaMap[kode], waktu });
+    saveHadir();
+    render();
+
+    showToast(`✅ ${siswaMap[kode]} — ${waktu}`, "success");
+
+    // Beep (opsional)
+    beep();
+  }
+
+  function submitManual() {
+    const input = document.getElementById("manualInput");
+    prosesAbsen(input.value);
+    input.value = "";
+    input.focus();
+  }
+
+  // Enter untuk submit manual
+  document.getElementById("manualInput").addEventListener("keypress", e => {
+    if (e.key === "Enter") submitManual();
+  });
+
+  // ============ BEEP ============
+  function beep() {
+    try {
+      const ctx = new (window.AudioContext || window.webkitAudioContext)();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.frequency.value = 880;
+      gain.gain.setValueAtTime(0.15, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.15);
+      osc.start();
+      osc.stop(ctx.currentTime + 0.15);
+    } catch(e) {}
+  }
+
+  // ============ TOAST ============
+  let toastTimer;
+  function showToast(msg, type = "success") {
+    const t = document.getElementById("toast");
+    t.textContent = msg;
+    t.className = "show " + (type === "success" ? "" : type);
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => { t.className = ""; }, 2500);
+  }
+
+  // ============ EXPORT CSV ============
+  function exportCSV() {
+    if (hadirHariIni.length === 0) {
+      showToast("Belum ada data untuk diexport", "warning");
+      return;
+    }
+
+    const today = new Date().toLocaleDateString("id-ID").replace(/\//g, "-");
+    let csv = "No,Nama,Kode,Waktu\n";
+    hadirHariIni.forEach((h, i) => {
+      csv += `${i+1},"${h.nama}",${h.kode},${h.waktu}\n`;
+    });
+
+    const blob = new Blob(["\ufeff" + csv], { type: "text/csv;charset=utf-8;" });
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.download = `absensi_KP2A_${today}.csv`;
+    link.click();
+    showToast("📤 CSV berhasil diunduh", "success");
+  }
+
+  // ============ RESET ============
+  function resetHariIni() {
+    if (hadirHariIni.length === 0) return;
+    if (!confirm(`Reset absensi hari ini? (${hadirHariIni.length} data akan dihapus)`)) return;
+    hadirHariIni = [];
+    saveHadir();
+    render();
+    showToast("Data hari ini direset", "success");
+  }
+
+  // ============ SETTINGS ============
+  function openSettings() {
+    const text = Object.entries(siswaMap).map(([kode, nama]) => `${nama}, ${kode}`).join("\n");
+    document.getElementById("siswaInput").value = text;
+    document.getElementById("modalSettings").classList.add("active");
+  }
+
+  function closeSettings() {
+    document.getElementById("modalSettings").classList.remove("active");
+  }
+
+  function saveSiswa() {
+    const text = document.getElementById("siswaInput").value;
+    const rows = text.split(/\r?\n/).filter(l => l.trim() !== "");
+    const map = {};
+    let invalid = 0;
+    rows.forEach(line => {
+      const parts = line.split(/[,;\t]/).map(s => s.trim());
+      if (parts.length >= 2 && parts[0] && parts[1]) {
+        map[parts[1]] = parts[0]; // kode → nama
+      } else if (line.trim()) {
+        invalid++;
+      }
+    });
+    siswaMap = map;
+    localStorage.setItem(KEY_SISWA, JSON.stringify(map));
+    closeSettings();
+    render();
+    showToast(`✅ ${Object.keys(map).length} siswa tersimpan${invalid ? ` (${invalid} baris dilewati)` : ""}`);
+  }
+
+  // ============ START ============
+  loadData();
+</script>
+
+</body>
+</html>
