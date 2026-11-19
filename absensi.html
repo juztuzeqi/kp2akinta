@@ -450,18 +450,24 @@
     document.getElementById("modalStatus").classList.remove("active");
   }
 
+  // ============ SET STATUS (SUDAH DIPERBAIKI) ============
   function setStatus(kode) {
     if (!kodeAktif) return;
+
+    // Simpan siswa DULU sebelum closeModal menghapus kodeAktif
+    const siswa = siswaList.find(s => s.kode === kodeAktif);
+
     if (!semuaAbsensi[todayKey()]) semuaAbsensi[todayKey()] = {};
     semuaAbsensi[todayKey()][kodeAktif] = kode;
     simpanLokal();
     render();
     closeModal();
+
     const label = { h: "Hadir", s: "Sakit", k: "Keluarga", l: "Lain-lain", t: "Tanpa Ket." };
     showToast(`✅ Status diubah: ${label[kode]}`, "success");
 
-    const siswa = siswaList.find(s => s.kode === kodeAktif);
-    if (siswa) simpanKeSupabase(kodeAktif, siswa.nama, kode);
+    // Baru kirim ke Supabase, pakai data siswa yang sudah disimpan tadi
+    if (siswa) simpanKeSupabase(siswa.kode, siswa.nama, kode);
   }
 
   // ============ BEEP ============
@@ -523,7 +529,6 @@
   muatDariSupabase();
 
   // ============ REALTIME LISTENER ============
-  // Mendengarkan perubahan dari perangkat lain secara langsung
   supabaseClient
     .channel('absensi-changes-' + kelas)
     .on(
