@@ -25,7 +25,7 @@ const DATA_KELAS = {
   },
 
   KTM2: {
-    tutor: "ISI_NAMA_TUTOR_KTM2",
+    tutor: "Ms Adinda",
     siswa: [
       { nama: "Afkar Arziki Pratama", kode: "S2024071501644" },
       { nama: "Agatha Felicia", kode: "S2026110802595" },
@@ -51,7 +51,7 @@ const DATA_KELAS = {
   },
 
   KTM3A: {
-    tutor: "ISI_NAMA_TUTOR_KTM3A",
+    tutor: "Mr Mudra",
     siswa: [
       { nama: "Dessy Princess Ng", kode: "S2026071502433" },
       { nama: "Dzakiyya Talita Shaki", kode: "S2026080102456" },
@@ -77,7 +77,7 @@ const DATA_KELAS = {
   },
 
   KTM3B: {
-    tutor: "ISI_NAMA_TUTOR_KTM3B",
+    tutor: "Ms Rahel",
     siswa: [
       { nama: "Janice Henrietta", kode: "S2023030100758" },
       { nama: "Jayvin Yeo", kode: "S2025080102167" },
@@ -103,7 +103,7 @@ const DATA_KELAS = {
   },
 
   KTM5: {
-    tutor: "ISI_NAMA_TUTOR_KTM5",
+    tutor: "Goh Laoshi",
     siswa: [
       { nama: "Laode Andy Dellvino", kode: "S2026011202323" },
       { nama: "Louis Lawrence", kode: "S2026090702532" },
