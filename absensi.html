@@ -210,7 +210,7 @@
 <script>
   // ============ KONFIGURASI SUPABASE ============
   const SUPABASE_URL = "https://btuhrtrurtugcdjukglv.supabase.co";
-  const SUPABASE_KEY = "sb_publishable_yOHWxYsVz6Y3AoKMcaAi-Q_qMD44coe"; // sebaiknya ganti nanti
+  const SUPABASE_KEY = "sb_publishable_yOHWxYsVz6Y3AoKMcaAi-Q_qMD44coe";
 
   const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
@@ -270,7 +270,6 @@
         return;
       }
 
-      // Timpa cache lokal dengan data dari server untuk hari ini
       semuaAbsensi[todayKey()] = {};
       if (rows) {
         rows.forEach(r => {
@@ -522,6 +521,33 @@
   // ============ START ============
   render();
   muatDariSupabase();
+
+  // ============ REALTIME LISTENER ============
+  // Mendengarkan perubahan dari perangkat lain secara langsung
+  supabaseClient
+    .channel('absensi-changes-' + kelas)
+    .on(
+      'postgres_changes',
+      {
+        event: '*',
+        schema: 'public',
+        table: 'absensi',
+        filter: `kelas=eq.${kelas}`
+      },
+      (payload) => {
+        const baru = payload.new;
+        if (baru && baru.tanggal === todayKey()) {
+          if (!semuaAbsensi[todayKey()]) semuaAbsensi[todayKey()] = {};
+          semuaAbsensi[todayKey()][baru.kode_siswa] = baru.status;
+          simpanLokal();
+          render();
+          console.log("Realtime update:", baru.nama_siswa, "->", baru.status);
+        }
+      }
+    )
+    .subscribe((status) => {
+      console.log("Realtime status:", status);
+    });
 </script>
 
 </body>
