@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <title>Absensi — KP2A Kintamani</title>
 <script src="https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
   body { font-family: 'Segoe UI', Arial, sans-serif; background: #f0f2f5; color: #222; padding-bottom: 80px; }
@@ -16,21 +17,13 @@
     box-shadow: 0 2px 8px rgba(0,0,0,.15);
     display: flex; align-items: center; gap: 10px;
   }
-  header .back {
-    color: #fff; text-decoration: none; font-size: 16pt;
-    padding: 0 6px;
-  }
+  header .back { color: #fff; text-decoration: none; font-size: 16pt; padding: 0 6px; }
   header h1 { font-size: 14pt; letter-spacing: 0.5px; flex: 1; }
   header small { font-size: 8pt; opacity: 0.85; display: block; }
+  header .tgl { font-size: 8pt; opacity: 0.75; margin-top: 2px; }
 
-  .stats {
-    display: grid; grid-template-columns: repeat(4, 1fr);
-    gap: 6px; padding: 10px;
-  }
-  .stat {
-    background: #fff; border-radius: 8px; padding: 8px 4px;
-    text-align: center; box-shadow: 0 1px 4px rgba(0,0,0,.06);
-  }
+  .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; padding: 10px; }
+  .stat { background: #fff; border-radius: 8px; padding: 8px 4px; text-align: center; box-shadow: 0 1px 4px rgba(0,0,0,.06); }
   .stat .num { font-size: 15pt; font-weight: 700; color: #1a5276; }
   .stat .lbl { font-size: 7pt; color: #888; text-transform: uppercase; }
   .stat.hadir .num { color: #27ae60; }
@@ -75,7 +68,7 @@
   #daftarSiswa li {
     background: #fff; border-radius: 8px; padding: 10px 12px;
     margin-bottom: 6px; display: flex; align-items: center; gap: 10px;
-    box-shadow: 0 1px 3px rgba(0,0,0,.05); transition: opacity 0.2s;
+    box-shadow: 0 1px 3px rgba(0,0,0,.05);
   }
   #daftarSiswa li .avatar {
     width: 36px; height: 36px; border-radius: 50%;
@@ -122,7 +115,6 @@
   #toast.error { background: #c0392b; }
   #toast.warning { background: #e67e22; }
 
-  /* Modal pilih status */
   .modal {
     position: fixed; inset: 0; background: rgba(0,0,0,.6);
     display: none; align-items: center; justify-content: center;
@@ -163,6 +155,7 @@
   <div style="flex:1">
     <h1 id="judulKelas">Memuat...</h1>
     <small id="namaTutor"></small>
+    <div class="tgl" id="tanggalHariIni"></div>
   </div>
 </header>
 
@@ -195,7 +188,6 @@
   <ul id="daftarSiswa"></ul>
 </div>
 
-<!-- MODAL STATUS -->
 <div class="modal" id="modalStatus">
   <div class="modal-content">
     <h3 id="modalNama">—</h3>
@@ -215,6 +207,12 @@
 
 <script src="data-siswa.js"></script>
 <script>
+  // ============ KONFIGURASI SUPABASE ============
+  const SUPABASE_URL = "https://btuhrtrurtugcdjukglv.supabase.co";
+  const SUPABASE_KEY = "sb_publishable_yOHWxYsVz6Y3AoKMcaAi-Q_qMD44coe"; // GANTI DENGAN KEY ANDA
+
+  const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
   // ============ AMBIL KELAS DARI URL ============
   const params = new URLSearchParams(window.location.search);
   const kelas = params.get("kelas");
@@ -230,8 +228,11 @@
   document.getElementById("judulKelas").textContent = kelas;
   document.getElementById("namaTutor").textContent = "Tutor: " + infoKelas.tutor;
 
-  // ============ STORAGE ============
-  // Format: { "YYYY-MM-DD": { "S2025...": "h" | "s" | "k" | "l" | "t", ... }, ... }
+  const today = new Date();
+  document.getElementById("tanggalHariIni").textContent =
+    today.toLocaleDateString("id-ID", { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+
+  // ============ STORAGE LOKAL (CACHE) ============
   const KEY = "kp2a_absensi_" + kelas;
 
   function todayKey() {
@@ -248,8 +249,33 @@
     return semuaAbsensi[todayKey()] || {};
   }
 
-  function simpan() {
+  function simpanLokal() {
     localStorage.setItem(KEY, JSON.stringify(semuaAbsensi));
+  }
+
+  // ============ SINKRON KE SUPABASE ============
+  async function simpanKeSupabase(kodeSiswa, namaSiswa, status) {
+    try {
+      const { error } = await supabaseClient
+        .from('absensi')
+        .upsert({
+          tanggal: todayKey(),
+          kelas: kelas,
+          kode_siswa: kodeSiswa,
+          nama_siswa: namaSiswa,
+          status: status
+        }, {
+          onConflict: 'tanggal,kelas,kode_siswa'
+        });
+
+      if (error) {
+        console.error("Supabase error:", error);
+        showToast("⚠️ Gagal sinkron ke server", "error");
+      }
+    } catch (err) {
+      console.error("Supabase exception:", err);
+      showToast("⚠️ Gagal sinkron ke server", "error");
+    }
   }
 
   // ============ RENDER ============
@@ -261,20 +287,16 @@
     siswaList.forEach(siswa => {
       const st = hariIni[siswa.kode];
       if (st === "h") h++;
-      else if (st === "s" || st === "k" || st === "l" || st === "t") a++;
+      else if (st === "s") s++;
+      else if (st === "k" || st === "l" || st === "t") a++;
       else b++;
     });
-    // Sakit dipisah untuk statistik
-    let sakit = 0;
-    siswaList.forEach(siswa => { if (hariIni[siswa.kode] === "s") sakit++; });
-    a = a - sakit; // izin/absen tanpa sakit
 
     document.getElementById("statH").textContent = h;
-    document.getElementById("statS").textContent = sakit;
+    document.getElementById("statS").textContent = s;
     document.getElementById("statA").textContent = a;
     document.getElementById("statB").textContent = b;
 
-    // Render daftar
     const ul = document.getElementById("daftarSiswa");
     const sorted = [...siswaList].sort((x, y) => {
       const sx = hariIni[x.kode] || "";
@@ -361,13 +383,14 @@
       return;
     }
 
-    // Tandai hadir
     if (!semuaAbsensi[todayKey()]) semuaAbsensi[todayKey()] = {};
     semuaAbsensi[todayKey()][kode] = "h";
-    simpan();
+    simpanLokal();
     render();
     showToast(`✅ ${siswa.nama} — Hadir`, "success");
     beep();
+
+    simpanKeSupabase(kode, siswa.nama, "h");
   }
 
   function submitManual() {
@@ -399,11 +422,14 @@
     if (!kodeAktif) return;
     if (!semuaAbsensi[todayKey()]) semuaAbsensi[todayKey()] = {};
     semuaAbsensi[todayKey()][kodeAktif] = kode;
-    simpan();
+    simpanLokal();
     render();
     closeModal();
     const label = { h: "Hadir", s: "Sakit", k: "Keluarga", l: "Lain-lain", t: "Tanpa Ket." };
     showToast(`✅ Status diubah: ${label[kode]}`, "success");
+
+    const siswa = siswaList.find(s => s.kode === kodeAktif);
+    if (siswa) simpanKeSupabase(kodeAktif, siswa.nama, kode);
   }
 
   // ============ BEEP ============
@@ -453,11 +479,11 @@
 
   // ============ RESET ============
   function resetHariIni() {
-    if (!confirm(`Reset absensi ${kelas} hari ini?`)) return;
+    if (!confirm(`Reset absensi ${kelas} hari ini? (Data di Supabase tidak terhapus)`)) return;
     delete semuaAbsensi[todayKey()];
-    simpan();
+    simpanLokal();
     render();
-    showToast("Data hari ini direset", "success");
+    showToast("Data lokal hari ini direset", "success");
   }
 
   // ============ START ============
