@@ -544,4 +544,148 @@
 
   searchInput.addEventListener("keydown", e => {
     const items = suggestionsBox.querySelectorAll(".suggestion-item[data-kode]");
-    if 
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      suggestionIndex = Math.min(suggestionIndex + 1, items.length - 1);
+      items.forEach((it, i) => it.classList.toggle("highlighted", i === suggestionIndex));
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      suggestionIndex = Math.max(suggestionIndex - 1, 0);
+      items.forEach((it, i) => it.classList.toggle("highlighted", i === suggestionIndex));
+    } else if (e.key === "Enter") {
+      e.preventDefault();
+      if (suggestionIndex >= 0 && items[suggestionIndex]) {
+        pilihSaran(items[suggestionIndex].getAttribute("data-kode"));
+      } else if (items.length === 1) {
+        pilihSaran(items[0].getAttribute("data-kode"));
+      }
+    } else if (e.key === "Escape") {
+      suggestionsBox.classList.remove("active");
+    }
+  });
+
+  // Tutup saran kalau klik di luar
+  document.addEventListener("click", e => {
+    if (!e.target.closest(".search-wrap")) {
+      suggestionsBox.classList.remove("active");
+    }
+  });
+
+  // ============ MODAL STATUS ============
+  let kodeAktif = null;
+
+  function openModal(kode, nama) {
+    kodeAktif = kode;
+    document.getElementById("modalNama").textContent = nama;
+    document.getElementById("modalStatus").classList.add("active");
+  }
+
+  function closeModal() {
+    kodeAktif = null;
+    document.getElementById("modalStatus").classList.remove("active");
+  }
+
+  function setStatus(kode) {
+    if (!kodeAktif) return;
+
+    const siswa = siswaList.find(s => s.kode === kodeAktif);
+
+    if (!semuaAbsensi[todayKey()]) semuaAbsensi[todayKey()] = {};
+    semuaAbsensi[todayKey()][kodeAktif] = kode;
+    simpanLokal();
+    render();
+    closeModal();
+
+    const label = { h: "Hadir", s: "Sakit", k: "Keluarga", l: "Lain-lain", t: "Tanpa Ket." };
+    showToast(`✅ Status diubah: ${label[kode]}`, "success");
+
+    if (siswa) simpanKeSupabase(siswa.kode, siswa.nama, kode);
+  }
+
+  // ============ BEEP ============
+  function beep() {
+    try {
+      const ctx = new (window.AudioContext || window.webkitAudioContext)();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain); gain.connect(ctx.destination);
+      osc.frequency.value = 880;
+      gain.gain.setValueAtTime(0.15, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.15);
+      osc.start(); osc.stop(ctx.currentTime + 0.15);
+    } catch(e) {}
+  }
+
+  // ============ TOAST ============
+  let toastTimer;
+  function showToast(msg, type = "success") {
+    const t = document.getElementById("toast");
+    t.textContent = msg;
+    t.className = "show " + (type === "success" ? "" : type);
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => { t.className = ""; }, 2500);
+  }
+
+  // ============ EXPORT CSV ============
+  function exportCSV() {
+    const hariIni = getHariIni();
+    if (Object.keys(hariIni).length === 0) {
+      showToast("Belum ada data untuk diexport", "warning");
+      return;
+    }
+    const label = { h: "Hadir", s: "Sakit", k: "Keluarga", l: "Lain-lain", t: "Tanpa Ket." };
+    let csv = "No,Nama,Kode,Status\n";
+    siswaList.forEach((s, i) => {
+      const st = hariIni[s.kode] || "-";
+      csv += `${i+1},"${s.nama}",${s.kode},${label[st] || "Belum"}\n`;
+    });
+    const blob = new Blob(["\ufeff" + csv], { type: "text/csv;charset=utf-8;" });
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.download = `absensi_${kelas}_${todayKey()}.csv`;
+    link.click();
+    showToast("📤 CSV berhasil diunduh", "success");
+  }
+
+  // ============ RESET ============
+  function resetHariIni() {
+    if (!confirm(`Reset absensi ${kelas} hari ini? (Data di Supabase tidak terhapus)`)) return;
+    delete semuaAbsensi[todayKey()];
+    simpanLokal();
+    render();
+    showToast("Data lokal hari ini direset", "success");
+  }
+
+  // ============ START ============
+  render();
+  muatDariSupabase();
+
+  // ============ REALTIME LISTENER ============
+  supabaseClient
+    .channel('absensi-changes-' + kelas)
+    .on(
+      'postgres_changes',
+      {
+        event: '*',
+        schema: 'public',
+        table: 'absensi',
+        filter: `kelas=eq.${kelas}`
+      },
+      (payload) => {
+        const baru = payload.new;
+        if (baru && baru.tanggal === todayKey()) {
+          if (!semuaAbsensi[todayKey()]) semuaAbsensi[todayKey()] = {};
+          semuaAbsensi[todayKey()][baru.kode_siswa] = baru.status;
+          simpanLokal();
+          render();
+          console.log("Realtime update:", baru.nama_siswa, "->", baru.status);
+        }
+      }
+    )
+    .subscribe((status) => {
+      console.log("Realtime status:", status);
+    });
+</script>
+
+</body>
+</html>
