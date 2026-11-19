@@ -43,15 +43,53 @@
   #reader { width: 100%; max-width: 500px; margin: 0 auto 10px; border-radius: 8px; overflow: hidden; display: none; }
   #reader.active { display: block; }
 
-  .manual { padding: 0 10px 10px; display: flex; gap: 8px; }
-  .manual input {
-    flex: 1; padding: 10px 12px; border: 1px solid #ccc;
-    border-radius: 8px; font-size: 10pt; font-family: 'Courier New', monospace;
+  /* ===== KOLOM PENCARIAN ===== */
+  .search-wrap { padding: 0 10px 10px; position: relative; }
+  .search-wrap input {
+    width: 100%; padding: 12px 14px; border: 1px solid #ccc;
+    border-radius: 8px; font-size: 11pt;
   }
-  .manual button {
-    background: #2e86c1; color: #fff; border: none;
-    padding: 10px 16px; border-radius: 8px; font-size: 10pt; font-weight: 600; cursor: pointer;
+  .search-wrap input:focus { outline: none; border-color: #2e86c1; }
+  .suggestions {
+    position: absolute; left: 10px; right: 10px; top: 100%;
+    background: #fff; border: 1px solid #ddd; border-radius: 8px;
+    box-shadow: 0 4px 16px rgba(0,0,0,.15);
+    max-height: 280px; overflow-y: auto; z-index: 50;
+    display: none;
   }
+  .suggestions.active { display: block; }
+  .suggestion-item {
+    padding: 10px 14px; cursor: pointer; border-bottom: 1px solid #f0f0f0;
+    display: flex; align-items: center; gap: 10px;
+  }
+  .suggestion-item:last-child { border-bottom: none; }
+  .suggestion-item:hover, .suggestion-item.highlighted {
+    background: #eaf2f8;
+  }
+  .suggestion-item .s-avatar {
+    width: 30px; height: 30px; border-radius: 50%;
+    background: #1a5276; color: #fff;
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 700; font-size: 10pt; flex-shrink: 0;
+  }
+  .suggestion-item .s-info { flex: 1; min-width: 0; }
+  .suggestion-item .s-nama {
+    font-size: 10pt; font-weight: 600; color: #222;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .suggestion-item .s-kode {
+    font-size: 8pt; font-family: 'Courier New', monospace; color: #888;
+  }
+  .suggestion-item .s-status {
+    font-size: 8pt; font-weight: 600; padding: 2px 8px; border-radius: 10px;
+    white-space: nowrap;
+  }
+  .s-status.h { background: #dcfce7; color: #27ae60; }
+  .s-status.s { background: #fdedec; color: #e74c3c; }
+  .s-status.k { background: #ebf5fb; color: #3498db; }
+  .s-status.l { background: #f4ecf7; color: #9b59b6; }
+  .s-status.t { background: #fef5e7; color: #e67e22; }
+  .s-status.belum { background: #f1f5f9; color: #999; }
 
   .list-section { padding: 0 10px; }
   .list-title {
@@ -172,9 +210,10 @@
 
 <div id="reader"></div>
 
-<div class="manual">
-  <input type="text" id="manualInput" placeholder="Ketik kode siswa..." autocomplete="off">
-  <button onclick="submitManual()">✓</button>
+<!-- KOLOM PENCARIAN -->
+<div class="search-wrap">
+  <input type="text" id="searchInput" placeholder="Cari nama atau ketik kode siswa..." autocomplete="off">
+  <div class="suggestions" id="suggestions"></div>
 </div>
 
 <div class="list-section">
@@ -254,7 +293,7 @@
     localStorage.setItem(KEY, JSON.stringify(semuaAbsensi));
   }
 
-  // ============ MUAT DARI SUPABASE (LOAD AWAL) ============
+  // ============ MUAT DARI SUPABASE ============
   async function muatDariSupabase() {
     showToast("Memuat data dari server...", "warning");
     try {
@@ -425,135 +464,84 @@
     simpanKeSupabase(kode, siswa.nama, "h");
   }
 
-  function submitManual() {
-    const input = document.getElementById("manualInput");
-    prosesAbsen(input.value);
-    input.value = "";
-    input.focus();
-  }
+  // ============ PENCARIAN & SARAN ============
+  const searchInput = document.getElementById("searchInput");
+  const suggestionsBox = document.getElementById("suggestions");
+  let suggestionIndex = -1;
 
-  document.getElementById("manualInput").addEventListener("keypress", e => {
-    if (e.key === "Enter") submitManual();
-  });
-
-  // ============ MODAL STATUS ============
-  let kodeAktif = null;
-
-  function openModal(kode, nama) {
-    kodeAktif = kode;
-    document.getElementById("modalNama").textContent = nama;
-    document.getElementById("modalStatus").classList.add("active");
-  }
-
-  function closeModal() {
-    kodeAktif = null;
-    document.getElementById("modalStatus").classList.remove("active");
-  }
-
-  // ============ SET STATUS (SUDAH DIPERBAIKI) ============
-  function setStatus(kode) {
-    if (!kodeAktif) return;
-
-    // Simpan siswa DULU sebelum closeModal menghapus kodeAktif
-    const siswa = siswaList.find(s => s.kode === kodeAktif);
-
-    if (!semuaAbsensi[todayKey()]) semuaAbsensi[todayKey()] = {};
-    semuaAbsensi[todayKey()][kodeAktif] = kode;
-    simpanLokal();
-    render();
-    closeModal();
-
-    const label = { h: "Hadir", s: "Sakit", k: "Keluarga", l: "Lain-lain", t: "Tanpa Ket." };
-    showToast(`✅ Status diubah: ${label[kode]}`, "success");
-
-    // Baru kirim ke Supabase, pakai data siswa yang sudah disimpan tadi
-    if (siswa) simpanKeSupabase(siswa.kode, siswa.nama, kode);
-  }
-
-  // ============ BEEP ============
-  function beep() {
-    try {
-      const ctx = new (window.AudioContext || window.webkitAudioContext)();
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.connect(gain); gain.connect(ctx.destination);
-      osc.frequency.value = 880;
-      gain.gain.setValueAtTime(0.15, ctx.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.15);
-      osc.start(); osc.stop(ctx.currentTime + 0.15);
-    } catch(e) {}
-  }
-
-  // ============ TOAST ============
-  let toastTimer;
-  function showToast(msg, type = "success") {
-    const t = document.getElementById("toast");
-    t.textContent = msg;
-    t.className = "show " + (type === "success" ? "" : type);
-    clearTimeout(toastTimer);
-    toastTimer = setTimeout(() => { t.className = ""; }, 2500);
-  }
-
-  // ============ EXPORT CSV ============
-  function exportCSV() {
-    const hariIni = getHariIni();
-    if (Object.keys(hariIni).length === 0) {
-      showToast("Belum ada data untuk diexport", "warning");
+  function renderSuggestions(query) {
+    query = query.trim().toLowerCase();
+    if (!query) {
+      suggestionsBox.classList.remove("active");
+      suggestionsBox.innerHTML = "";
+      suggestionIndex = -1;
       return;
     }
-    const label = { h: "Hadir", s: "Sakit", k: "Keluarga", l: "Lain-lain", t: "Tanpa Ket." };
-    let csv = "No,Nama,Kode,Status\n";
-    siswaList.forEach((s, i) => {
-      const st = hariIni[s.kode] || "-";
-      csv += `${i+1},"${s.nama}",${s.kode},${label[st] || "Belum"}\n`;
+
+    const hariIni = getHariIni();
+
+    // Filter: nama atau kode mengandung query
+    const hasil = siswaList.filter(s =>
+      s.nama.toLowerCase().includes(query) || s.kode.toLowerCase().includes(query)
+    ).slice(0, 20); // batasi 20 saran
+
+    if (hasil.length === 0) {
+      suggestionsBox.innerHTML = `<div class="suggestion-item" style="color:#999;cursor:default">Tidak ada siswa cocok</div>`;
+      suggestionsBox.classList.add("active");
+      suggestionIndex = -1;
+      return;
+    }
+
+    suggestionsBox.innerHTML = hasil.map((s, i) => {
+      const st = hariIni[s.kode];
+      const label = { h: "Hadir", s: "Sakit", k: "Keluarga", l: "Lain-lain", t: "Tanpa Ket." };
+      const stText = label[st] || "Belum";
+      const stClass = st || "belum";
+      return `
+        <div class="suggestion-item" data-kode="${s.kode}" data-nama="${s.nama.replace(/"/g, '&quot;')}" data-index="${i}">
+          <div class="s-avatar">${s.nama[0].toUpperCase()}</div>
+          <div class="s-info">
+            <div class="s-nama">${s.nama}</div>
+            <div class="s-kode">${s.kode}</div>
+          </div>
+          <div class="s-status ${stClass}">${stText}</div>
+        </div>
+      `;
+    }).join("");
+
+    suggestionsBox.classList.add("active");
+    suggestionIndex = -1;
+
+    // Pasang event klik
+    suggestionsBox.querySelectorAll(".suggestion-item").forEach(el => {
+      el.addEventListener("click", () => {
+        const kode = el.getAttribute("data-kode");
+        pilihSaran(kode);
+      });
     });
-    const blob = new Blob(["\ufeff" + csv], { type: "text/csv;charset=utf-8;" });
-    const link = document.createElement("a");
-    link.href = URL.createObjectURL(blob);
-    link.download = `absensi_${kelas}_${todayKey()}.csv`;
-    link.click();
-    showToast("📤 CSV berhasil diunduh", "success");
   }
 
-  // ============ RESET ============
-  function resetHariIni() {
-    if (!confirm(`Reset absensi ${kelas} hari ini? (Data di Supabase tidak terhapus)`)) return;
-    delete semuaAbsensi[todayKey()];
-    simpanLokal();
-    render();
-    showToast("Data lokal hari ini direset", "success");
+  function pilihSaran(kode) {
+    searchInput.value = "";
+    suggestionsBox.classList.remove("active");
+    suggestionsBox.innerHTML = "";
+    suggestionIndex = -1;
+
+    const hariIni = getHariIni();
+    if (hariIni[kode]) {
+      // Sudah tercatat → buka modal untuk ubah
+      const siswa = siswaList.find(s => s.kode === kode);
+      if (siswa) openModal(kode, siswa.nama);
+    } else {
+      // Belum tercatat → langsung proses hadir
+      prosesAbsen(kode);
+    }
   }
 
-  // ============ START ============
-  render();
-  muatDariSupabase();
+  searchInput.addEventListener("input", e => {
+    renderSuggestions(e.target.value);
+  });
 
-  // ============ REALTIME LISTENER ============
-  supabaseClient
-    .channel('absensi-changes-' + kelas)
-    .on(
-      'postgres_changes',
-      {
-        event: '*',
-        schema: 'public',
-        table: 'absensi',
-        filter: `kelas=eq.${kelas}`
-      },
-      (payload) => {
-        const baru = payload.new;
-        if (baru && baru.tanggal === todayKey()) {
-          if (!semuaAbsensi[todayKey()]) semuaAbsensi[todayKey()] = {};
-          semuaAbsensi[todayKey()][baru.kode_siswa] = baru.status;
-          simpanLokal();
-          render();
-          console.log("Realtime update:", baru.nama_siswa, "->", baru.status);
-        }
-      }
-    )
-    .subscribe((status) => {
-      console.log("Realtime status:", status);
-    });
-</script>
-
-</body>
-</html>
+  searchInput.addEventListener("keydown", e => {
+    const items = suggestionsBox.querySelectorAll(".suggestion-item[data-kode]");
+    if 
