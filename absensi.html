@@ -181,6 +181,7 @@
   <div class="list-title">
     <span id="labelDaftar">Daftar Siswa</span>
     <span class="actions">
+      <button onclick="muatDariSupabase()">🔄 Refresh</button>
       <button onclick="exportCSV()">📤 CSV</button>
       <button class="danger" onclick="resetHariIni()">🔄 Reset</button>
     </span>
@@ -209,7 +210,7 @@
 <script>
   // ============ KONFIGURASI SUPABASE ============
   const SUPABASE_URL = "https://btuhrtrurtugcdjukglv.supabase.co";
-  const SUPABASE_KEY = "sb_publishable_yOHWxYsVz6Y3AoKMcaAi-Q_qMD44coe"; // GANTI DENGAN KEY ANDA
+  const SUPABASE_KEY = "sb_publishable_yOHWxYsVz6Y3AoKMcaAi-Q_qMD44coe"; // sebaiknya ganti nanti
 
   const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
@@ -251,6 +252,38 @@
 
   function simpanLokal() {
     localStorage.setItem(KEY, JSON.stringify(semuaAbsensi));
+  }
+
+  // ============ MUAT DARI SUPABASE (LOAD AWAL) ============
+  async function muatDariSupabase() {
+    showToast("Memuat data dari server...", "warning");
+    try {
+      const { data: rows, error } = await supabaseClient
+        .from('absensi')
+        .select('*')
+        .eq('kelas', kelas)
+        .eq('tanggal', todayKey());
+
+      if (error) {
+        console.error("Supabase load error:", error);
+        showToast("⚠️ Gagal memuat dari server", "error");
+        return;
+      }
+
+      // Timpa cache lokal dengan data dari server untuk hari ini
+      semuaAbsensi[todayKey()] = {};
+      if (rows) {
+        rows.forEach(r => {
+          semuaAbsensi[todayKey()][r.kode_siswa] = r.status;
+        });
+      }
+      simpanLokal();
+      render();
+      showToast(`✅ Data dimuat: ${rows ? rows.length : 0} catatan`, "success");
+    } catch (err) {
+      console.error("Supabase load exception:", err);
+      showToast("⚠️ Gagal memuat dari server", "error");
+    }
   }
 
   // ============ SINKRON KE SUPABASE ============
@@ -488,6 +521,7 @@
 
   // ============ START ============
   render();
+  muatDariSupabase();
 </script>
 
 </body>
